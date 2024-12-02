@@ -1,6 +1,4 @@
 import streamlit as st
-import pandas as pd
-import json
 from src.data_loader import load_csv
 from src.field_matcher import auto_match_fields, check_for_duplicates, interactive_field_mapping, field_mapping_json_to_table
 from src.transformer import transform_mhap_info
@@ -75,18 +73,6 @@ if uploaded_file:
         if st.button("Transform Data"):
             transformed_df = transform_mhap_info(
                 df, bioinfo_ID, field_mapping, selected_additional_fields)
-
-            st.write("Transformed Data:")
-            # st.write(transformed_df)
-            # Convert the dictionary to a JSON string
-            json_data = json.dumps(transformed_df, indent=4)
-
-            # Add a download button for JSON
-            st.download_button(
-                "Download Converted Data",
-                json_data,
-                "mhap_info.json",
-                "application/json"
-            )
-
-# TODO: use pmotools instead of copying code
+            st.session_state["mhap_data"] = transformed_df
+            st.success(
+                f"Microhaplotype Information from Bioinformatics Run '{bioinfo_ID}' has been saved!")
