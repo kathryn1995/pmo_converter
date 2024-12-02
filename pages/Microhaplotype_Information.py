@@ -1,66 +1,13 @@
 import streamlit as st
 import pandas as pd
 import json
-from collections import Counter
 from src.data_loader import load_csv
-from src.ai_matcher import auto_match_fields
-from src.transformer import transform_data
+from src.field_matcher import auto_match_fields, check_for_duplicates, interactive_field_mapping, field_mapping_json_to_table
+from src.transformer import transform_mhap_info
 from src.format_page import render_header
 
 render_header()
 st.subheader("Microhaplotype Information Converter", divider="gray")
-
-
-def check_for_duplicates(field_mapping):
-    """
-    Checks if there are any duplicate values in the dictionary.
-
-    Args:
-        field_mapping (dict): A dictionary mapping input field names to target schema fields.
-
-    Returns:
-        bool: True if no duplicates are found. Raises a ValueError if duplicates exist.
-    """
-    # Extract the values (target schema fields) from the dictionary
-    counts = Counter(list(field_mapping.values()))
-    duplicates = {item for item, count in counts.items() if count > 1}
-    # Check for duplicates by comparing the length of the list to the length of the set
-    if duplicates:
-        raise ValueError(
-            f"Duplicate target schema fields found: {duplicates}")
-
-    return True
-
-
-def interactive_field_mapping(field_mapping, df_columns):
-    updated_mapping = {}
-
-    for field, suggested_match in field_mapping.items():
-        # Use streamlit widgets to allow the user to select a match from df columns
-        if isinstance(suggested_match, list):  # For multiple possible matches
-            updated_mapping[field] = st.selectbox(
-                f"Select match for {field}",
-                options=df_columns,
-                index=df_columns.index(
-                    suggested_match[0]) if suggested_match else 0
-            )
-        else:
-            updated_mapping[field] = st.selectbox(
-                f"Modify match for {field}",
-                options=df_columns,
-                index=df_columns.index(
-                    suggested_match) if suggested_match else 0
-            )
-
-    return updated_mapping
-
-
-def field_mapping_json_to_table(mapping):
-    data = [{"PMO Field": key, "Input Field": value}
-            for key, value in mapping.items()]
-    df = pd.DataFrame(data)
-    return df
-
 
 # Upload CSV
 st.subheader("Upload File")
@@ -99,24 +46,47 @@ if uploaded_file:
         st.dataframe(field_mapping_json_to_table(updated_mapping))
 
         check_for_duplicates(updated_mapping)
-    # TODO: Add in optional fields
-    # TODO: Add in option to select their own fields to add in
-    # TODO: Add in bioinfo ID
-    # Data Transformation
-    st.subheader("Transform Data")
-    if st.button("Transform Data"):
-        transformed_df = transform_data(df, 'bioinfo', field_mapping)
-        st.write("Transformed Data:")
-        # st.write(transformed_df)
-        # Convert the dictionary to a JSON string
-        json_data = json.dumps(transformed_df, indent=4)
 
-        # Add a download button for JSON
-        st.download_button(
-            "Download Converted Data",
-            json_data,
-            "panel_info_bioinfoid.json",
-            "application/json"
-        )
+    # Add additional fields
+    selected_additional_fields = None
+    if unused_field_names:
+        optional_additional_fields = st.toggle("Add additional fields")
+        if optional_additional_fields:
+            # Dictionary to store checkbox states
+            checkbox_states = {}
+
+            st.write("Select the extra columns you would like to include:")
+
+            # Dynamically create a checkbox for each item in the list
+            for item in unused_field_names:
+                # Add checkbox and store its state in the dictionary
+                checkbox_states[item] = st.checkbox(label=item)
+
+            # Display selected items
+            selected_additional_fields = [key for key,
+                                          value in checkbox_states.items() if value]
+            st.write("You selected:", selected_additional_fields)
+
+    bioinfo_ID = st.text_input(
+        "Enter bioinfo ID:", help='Identifier for the bioinformatics run.')
+    # Data Transformation
+    if bioinfo_ID:
+        st.subheader("Transform Data")
+        if st.button("Transform Data"):
+            transformed_df = transform_mhap_info(
+                df, bioinfo_ID, field_mapping, selected_additional_fields)
+
+            st.write("Transformed Data:")
+            # st.write(transformed_df)
+            # Convert the dictionary to a JSON string
+            json_data = json.dumps(transformed_df, indent=4)
+
+            # Add a download button for JSON
+            st.download_button(
+                "Download Converted Data",
+                json_data,
+                "mhap_info.json",
+                "application/json"
+            )
 
 # TODO: use pmotools instead of copying code
